@@ -1,0 +1,45 @@
+
+# Dependencies
+node_modules/
+backend/node_modules/
+backend/venv/
+
+# Environment variables and secrets
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native builds
+/android/
+/ios/
+.kotlin/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Build outputs
+backend/dist/
+*.tsbuildinfo
+
+# Debug files
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+*.log
+
+# OS files
+.DS_Store
+
+# Editor
+.vscode/

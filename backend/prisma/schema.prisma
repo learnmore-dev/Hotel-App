@@ -1,0 +1,402 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRole {
+  CUSTOMER
+  PARTNER
+  ADMIN
+}
+
+enum RoomStatus {
+  AVAILABLE
+  MAINTENANCE
+  INACTIVE
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+enum BookingPaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+enum CouponDiscountType {
+  PERCENTAGE
+  FIXED
+  FIXED_AMOUNT
+}
+
+enum PaymentMethod {
+  UPI
+  CARD
+  NET_BANKING
+  PAY_AT_HOTEL
+}
+
+enum PaymentStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  REFUNDED
+}
+
+enum PartnerProfileStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum PayoutStatus {
+  PENDING
+  PROCESSING
+  PAID
+  FAILED
+  REJECTED
+}
+
+enum NotificationType {
+  BOOKING
+  PAYMENT
+  PROMOTION
+  SYSTEM
+}
+
+model User {
+  id              String   @id @default(uuid()) @db.Uuid
+  fullName        String   @db.VarChar(160)
+  email           String   @unique @db.VarChar(320)
+  phone           String?  @unique @db.VarChar(32)
+  passwordHash    String   @db.VarChar(255)
+  role            UserRole @default(CUSTOMER)
+  avatar          String?
+  isActive        Boolean  @default(true)
+  isEmailVerified Boolean  @default(false)
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime @updatedAt @db.Timestamptz(3)
+
+  partnerProfile         PartnerProfile?
+  bookings               Booking[]               @relation("BookingCustomer")
+  reviews                Review[]                @relation("ReviewCustomer")
+  payments               Payment[]               @relation("PaymentCustomer")
+  notifications          Notification[]
+  notificationPreference NotificationPreference?
+  pushDevices            PushDevice[]
+  refreshTokens          RefreshToken[]
+
+  @@index([role, isActive])
+  @@index([createdAt])
+}
+
+model PartnerProfile {
+  id             String               @id @default(uuid()) @db.Uuid
+  userId         String               @unique @db.Uuid
+  businessName   String               @db.VarChar(200)
+  businessEmail  String?              @db.VarChar(320)
+  businessPhone  String?              @db.VarChar(32)
+  address        String?
+  documents      Json                 @default("[]")
+  status         PartnerProfileStatus @default(PENDING)
+  commissionRate Decimal              @default(0) @db.Decimal(5, 2)
+  createdAt      DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime             @updatedAt @db.Timestamptz(3)
+
+  user    User     @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hotels  Hotel[]
+  payouts Payout[]
+
+  @@index([status])
+}
+
+model Hotel {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @db.VarChar(200)
+  description   String?
+  city          String   @db.VarChar(120)
+  destination   String?  @db.VarChar(120)
+  address       String
+  latitude      Decimal? @db.Decimal(10, 7)
+  longitude     Decimal? @db.Decimal(10, 7)
+  starRating    Int?
+  ratingScore   Decimal? @db.Decimal(3, 2)
+  reviewCount   Int      @default(0)
+  pricePerNight Decimal  @db.Decimal(12, 2)
+  originalPrice Decimal? @db.Decimal(12, 2)
+  mainImage     String?
+  galleryImages String[] @default([])
+  amenities     String[] @default([])
+  checkInTime   String?  @db.VarChar(20)
+  checkOutTime  String?  @db.VarChar(20)
+  isFeatured    Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  partnerId     String   @db.Uuid
+  createdAt     DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime @updatedAt @db.Timestamptz(3)
+
+  partner  PartnerProfile @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  rooms    Room[]
+  bookings Booking[]
+  reviews  Review[]
+
+  @@index([city])
+  @@index([destination])
+  @@index([starRating])
+  @@index([isFeatured])
+  @@index([isActive])
+  @@index([partnerId])
+  @@index([city, isActive, isFeatured])
+  @@index([destination, isActive])
+}
+
+model Room {
+  id             String     @id @default(uuid()) @db.Uuid
+  hotelId        String     @db.Uuid
+  roomType       String     @db.VarChar(120)
+  description    String?
+  pricePerNight  Decimal    @db.Decimal(12, 2)
+  maxGuests      Int
+  bedType        String?    @db.VarChar(100)
+  amenities      String[]   @default([])
+  inclusions     String[]   @default([])
+  images         String[]   @default([])
+  totalRooms     Int        @default(0)
+  availableRooms Int        @default(0)
+  blockedRooms   Int        @default(0)
+  status         RoomStatus @default(AVAILABLE)
+  createdAt      DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime   @updatedAt @db.Timestamptz(3)
+
+  hotel    Hotel     @relation(fields: [hotelId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  bookings Booking[]
+
+  @@index([hotelId])
+  @@index([status])
+  @@index([hotelId, status])
+}
+
+model Booking {
+  id                 String               @id @default(uuid()) @db.Uuid
+  bookingId          String               @unique @db.VarChar(40)
+  idempotencyKey     String?              @unique @db.VarChar(128)
+  customerId         String               @db.Uuid
+  hotelId            String               @db.Uuid
+  roomId             String               @db.Uuid
+  checkIn            DateTime             @db.Date
+  checkOut           DateTime             @db.Date
+  roomsCount         Int
+  guestsCount        Int
+  guestDetails       Json
+  specialRequests    String?
+  numberOfNights     Int
+  roomPrice          Decimal              @db.Decimal(12, 2)
+  taxAmount          Decimal              @default(0) @db.Decimal(12, 2)
+  discountAmount     Decimal              @default(0) @db.Decimal(12, 2)
+  totalAmount        Decimal              @db.Decimal(12, 2)
+  couponId           String?              @db.Uuid
+  paymentStatus      BookingPaymentStatus @default(PENDING)
+  bookingStatus      BookingStatus        @default(PENDING)
+  cancellationReason String?
+  cancelledAt        DateTime?            @db.Timestamptz(3)
+  createdAt          DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt          DateTime             @updatedAt @db.Timestamptz(3)
+
+  customer User     @relation("BookingCustomer", fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hotel    Hotel    @relation(fields: [hotelId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  room     Room     @relation(fields: [roomId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  coupon   Coupon?  @relation(fields: [couponId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  payment  Payment?
+  review   Review?
+  payouts  Payout[]
+
+  @@index([customerId, createdAt])
+  @@index([hotelId, checkIn, checkOut])
+  @@index([roomId, checkIn, checkOut])
+  @@index([bookingStatus, paymentStatus])
+  @@index([couponId])
+}
+
+model Coupon {
+  id                   String             @id @default(uuid()) @db.Uuid
+  code                 String             @unique @db.VarChar(64)
+  description          String?
+  discountType         CouponDiscountType
+  discountValue        Decimal            @db.Decimal(12, 2)
+  minimumBookingAmount Decimal            @default(0) @db.Decimal(12, 2)
+  maximumDiscount      Decimal?           @db.Decimal(12, 2)
+  validFrom            DateTime           @db.Timestamptz(3)
+  validUntil           DateTime           @db.Timestamptz(3)
+  usageLimit           Int?
+  usedCount            Int                @default(0)
+  perUserLimit         Int?
+  isActive             Boolean            @default(true)
+  createdAt            DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime           @updatedAt @db.Timestamptz(3)
+
+  bookings Booking[]
+
+  @@index([isActive, validFrom, validUntil])
+}
+
+model Payment {
+  id               String        @id @default(uuid()) @db.Uuid
+  bookingId        String        @unique @db.Uuid
+  customerId       String        @db.Uuid
+  amount           Decimal       @db.Decimal(12, 2)
+  currency         String        @default("USD") @db.VarChar(3)
+  paymentMethod    PaymentMethod
+  transactionId    String?       @unique @db.VarChar(160)
+  gatewayOrderId   String?       @unique @db.VarChar(120)
+  gatewayPaymentId String?       @unique @db.VarChar(120)
+  gatewaySignature String?       @db.VarChar(255)
+  status           PaymentStatus @default(PENDING)
+  gateway          String?       @db.VarChar(100)
+  gatewayResponse  Json?
+  paidAt           DateTime?     @db.Timestamptz(3)
+  createdAt        DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime      @updatedAt @db.Timestamptz(3)
+
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  customer User    @relation("PaymentCustomer", fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([customerId, createdAt])
+  @@index([status, createdAt])
+  @@index([gatewayOrderId])
+}
+
+model WebhookEvent {
+  id          String   @id @default(uuid()) @db.Uuid
+  eventId     String   @unique @db.VarChar(120)
+  eventType   String   @db.VarChar(80)
+  provider    String   @default("RAZORPAY") @db.VarChar(40)
+  payload     Json
+  processedAt DateTime @default(now()) @db.Timestamptz(3)
+
+  @@index([provider, eventType])
+  @@index([processedAt])
+}
+
+model Review {
+  id          String   @id @default(uuid()) @db.Uuid
+  customerId  String   @db.Uuid
+  hotelId     String   @db.Uuid
+  bookingId   String   @unique @db.Uuid
+  rating      Int
+  comment     String
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime @updatedAt @db.Timestamptz(3)
+
+  customer User    @relation("ReviewCustomer", fields: [customerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  hotel    Hotel   @relation(fields: [hotelId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([hotelId, isPublished, createdAt])
+  @@index([customerId, createdAt])
+  @@index([rating])
+}
+
+model Payout {
+  id                   String       @id @default(uuid()) @db.Uuid
+  partnerId            String       @db.Uuid
+  bookingId            String       @db.Uuid
+  batchReference       String?      @db.VarChar(160)
+  amount               Decimal      @db.Decimal(12, 2)
+  commissionAmount     Decimal      @db.Decimal(12, 2)
+  netAmount            Decimal      @db.Decimal(12, 2)
+  status               PayoutStatus @default(PENDING)
+  transactionReference String?      @unique @db.VarChar(160)
+  processedAt          DateTime?    @db.Timestamptz(3)
+  rejectionReason      String?
+  notes                String?
+  processedBy          String?      @db.Uuid
+  createdAt            DateTime     @default(now()) @db.Timestamptz(3)
+  updatedAt            DateTime     @updatedAt @db.Timestamptz(3)
+
+  partner PartnerProfile @relation(fields: [partnerId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  booking Booking        @relation(fields: [bookingId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+
+  @@index([partnerId, status, createdAt])
+  @@index([bookingId])
+  @@index([batchReference])
+}
+
+model Notification {
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @db.Uuid
+  title     String           @db.VarChar(160)
+  message   String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  readAt    DateTime?        @db.Timestamptz(3)
+  dedupKey  String?          @unique @db.VarChar(160)
+  actionUrl String?          @db.VarChar(255)
+  data      Json?
+  createdAt DateTime         @default(now()) @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@index([type, createdAt])
+  @@index([dedupKey])
+}
+
+model NotificationPreference {
+  id             String   @id @default(uuid()) @db.Uuid
+  userId         String   @unique @db.Uuid
+  bookingUpdates Boolean  @default(true)
+  paymentAlerts  Boolean  @default(true)
+  payoutAlerts   Boolean  @default(true)
+  reminders      Boolean  @default(true)
+  marketing      Boolean  @default(false)
+  pushEnabled    Boolean  @default(true)
+  emailEnabled   Boolean  @default(true)
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+}
+
+model PushDevice {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  pushToken  String   @unique @db.VarChar(255)
+  deviceType String?  @db.VarChar(40)
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId, isActive])
+}
+
+model RefreshToken {
+  id              String    @id @default(uuid()) @db.Uuid
+  userId          String    @db.Uuid
+  tokenHash       String    @unique @db.VarChar(64)
+  family          String    @default(uuid()) @db.Uuid
+  isRevoked       Boolean   @default(false)
+  revokedAt       DateTime? @db.Timestamptz(3)
+  replacedByToken String?   @db.VarChar(64)
+  expiresAt       DateTime  @db.Timestamptz(3)
+  createdAt       DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime  @updatedAt @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+
+  @@index([userId, isRevoked])
+  @@index([family])
+  @@index([expiresAt])
+}
