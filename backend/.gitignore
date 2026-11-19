@@ -43,3 +43,16 @@ yarn-error.*
 
 # Editor
 .vscode/
+
+# Python generated files
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Django runtime uploads
+backend/media/
+
+# Build and debug logs
+*.log
+android-build-error.txt
+android-release-build.log
